@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Путеводитель по Курску</string>
+    <string name="navigation_home">Главная</string>
+    <string name="navigation_favorites">Избранное</string>
+    <string name="navigation_map">Карта</string>
+    <string name="navigation_info">О городе</string>
+</resources>

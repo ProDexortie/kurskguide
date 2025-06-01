@@ -2,9 +2,6 @@ package com.example.kurskguide
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -43,11 +40,20 @@ class SearchResultsActivity : AppCompatActivity() {
     }
 
     private fun performSearch() {
-        val results = KurskPlacesData.searchPlaces(query)
+        val results = searchPlaces(query)
         placesAdapter.updatePlaces(results)
 
         findViewById<TextView>(R.id.tvSearchResultsCount).text =
             "Найдено результатов: ${results.size}"
+    }
+
+    private fun searchPlaces(query: String): List<Place> {
+        val allPlaces = KurskPlacesData.places + KurskPlacesData.getUserPlaces(this)
+        return allPlaces.filter {
+            it.name.contains(query, ignoreCase = true) ||
+                    it.description.contains(query, ignoreCase = true) ||
+                    it.address.contains(query, ignoreCase = true)
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

@@ -38,8 +38,8 @@ class MapActivity : AppCompatActivity(), InputListener {
 
     // ВАЖНО: Сохраняем сильные ссылки на все объекты
     private val placeMarkers = mutableMapOf<Int, PlacemarkMapObject>()
-    private val tapListeners = mutableMapOf<Int, MapObjectTapListener>() // Сохраняем слушатели
-    private val bitmapCache = mutableMapOf<String, Bitmap>() // Кэш для bitmap'ов
+    private val tapListeners = mutableMapOf<Int, MapObjectTapListener>()
+    private val bitmapCache = mutableMapOf<String, Bitmap>()
 
     private var selectedPlace: Place? = null
 
@@ -50,14 +50,20 @@ class MapActivity : AppCompatActivity(), InputListener {
     private lateinit var btnInfoRoute: Button
     private lateinit var btnCloseInfo: Button
 
+    // Новые элементы для добавления места
+    private lateinit var btnAddPlace: Button
+    private lateinit var cardAddPlace: CardView
+    private lateinit var btnConfirmAddPlace: Button
+    private lateinit var btnCancelAddPlace: Button
+    private lateinit var centerMarker: View
+
+    private var isAddingPlace = false
+    private var centerMarkerPlacemark: PlacemarkMapObject? = null
+
     private var targetPlaceId: Int = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // MapKit теперь инициализируется в Application классе!
-        // Никаких вызовов MapKitFactory здесь больше нет
-
         setContentView(R.layout.activity_map)
 
         targetPlaceId = intent.getIntExtra("place_id", -1)
@@ -78,6 +84,13 @@ class MapActivity : AppCompatActivity(), InputListener {
         btnInfoDetails = findViewById(R.id.btnInfoDetails)
         btnInfoRoute = findViewById(R.id.btnInfoRoute)
         btnCloseInfo = findViewById(R.id.btnCloseInfo)
+
+        // Новые элементы
+        btnAddPlace = findViewById(R.id.btnAddPlace)
+        cardAddPlace = findViewById(R.id.cardAddPlace)
+        btnConfirmAddPlace = findViewById(R.id.btnConfirmAddPlace)
+        btnCancelAddPlace = findViewById(R.id.btnCancelAddPlace)
+        centerMarker = findViewById(R.id.centerMarker)
     }
 
     private fun initMap() {
@@ -85,7 +98,6 @@ class MapActivity : AppCompatActivity(), InputListener {
             map = mapView.map
             mapObjectCollection = map.mapObjects
 
-            // Центрируем карту на Курске
             val kurskCenter = Point(51.7373, 36.1873)
             map.move(
                 CameraPosition(kurskCenter, 12.0f, 0.0f, 0.0f),
@@ -93,19 +105,15 @@ class MapActivity : AppCompatActivity(), InputListener {
                 null
             )
 
-            // Включаем управление картой
             map.addInputListener(this)
 
-            // Добавляем маркеры через небольшую задержку
             Handler(Looper.getMainLooper()).postDelayed({
                 addAllPlacesToMap()
 
-                // Если передан конкретный ID места, показываем его
                 if (targetPlaceId != -1) {
                     showTargetPlace(targetPlaceId)
                 }
             }, 1000)
-
 
         } catch (e: Exception) {
             Toast.makeText(this, "Ошибка инициализации карты: ${e.message}", Toast.LENGTH_LONG).show()
@@ -122,10 +130,17 @@ class MapActivity : AppCompatActivity(), InputListener {
             requestLocationPermissionAndShow()
         }
 
-        // Долгое нажатие для диагностики
-        findViewById<Button>(R.id.btnShowAllPlaces).setOnLongClickListener {
-            checkMarkersIntegrity()
-            true
+        // Новый функционал добавления места
+        btnAddPlace.setOnClickListener {
+            startAddingPlace()
+        }
+
+        btnConfirmAddPlace.setOnClickListener {
+            confirmAddPlace()
+        }
+
+        btnCancelAddPlace.setOnClickListener {
+            cancelAddingPlace()
         }
 
         btnCloseInfo.setOnClickListener {
@@ -147,27 +162,88 @@ class MapActivity : AppCompatActivity(), InputListener {
         }
     }
 
+    private fun startAddingPlace() {
+        isAddingPlace = true
+        hideInfoPanel()
+
+        // Показываем UI для добавления места
+        cardAddPlace.visibility = View.VISIBLE
+        centerMarker.visibility = View.VISIBLE
+        btnAddPlace.visibility = View.GONE
+
+        // Анимация появления
+        cardAddPlace.alpha = 0f
+        cardAddPlace.animate()
+            .alpha(1f)
+            .setDuration(300)
+            .start()
+
+        Toast.makeText(this, "Переместите карту для выбора места", Toast.LENGTH_LONG).show()
+    }
+
+    private fun confirmAddPlace() {
+        val centerPoint = map.cameraPosition.target
+
+        // Запускаем активность для ввода данных о месте
+        val intent = Intent(this, AddPlaceActivity::class.java)
+        intent.putExtra("latitude", centerPoint.latitude)
+        intent.putExtra("longitude", centerPoint.longitude)
+        startActivityForResult(intent, ADD_PLACE_REQUEST_CODE)
+
+        cancelAddingPlace()
+    }
+
+    private fun cancelAddingPlace() {
+        isAddingPlace = false
+
+        // Скрываем UI для добавления места
+        cardAddPlace.animate()
+            .alpha(0f)
+            .setDuration(300)
+            .withEndAction {
+                cardAddPlace.visibility = View.GONE
+                centerMarker.visibility = View.GONE
+                btnAddPlace.visibility = View.VISIBLE
+            }
+            .start()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == ADD_PLACE_REQUEST_CODE && resultCode == RESULT_OK) {
+            // Обновляем карту с новым местом
+            Handler(Looper.getMainLooper()).postDelayed({
+                addAllPlacesToMap()
+                Toast.makeText(this, "Место успешно добавлено!", Toast.LENGTH_SHORT).show()
+            }, 500)
+        }
+    }
+
     private fun addAllPlacesToMap() {
         try {
-            // Очищаем старые данные
             placeMarkers.clear()
             tapListeners.clear()
             mapObjectCollection.clear()
 
             var addedCount = 0
 
+            // Добавляем стандартные места
             KurskPlacesData.places.forEach { place ->
                 if (place.latitude != 0.0 && place.longitude != 0.0) {
                     addPlaceMarker(place)
                     addedCount++
-
-                    // Добавляем отладочную информацию
-                    println("Добавлен маркер ${place.id}: ${place.name} (${place.category})")
                 }
             }
 
+            // Добавляем пользовательские места
+            KurskPlacesData.getUserPlaces(this).forEach { place ->
+                if (place.latitude != 0.0 && place.longitude != 0.0) {
+                    addPlaceMarker(place)
+                    addedCount++
+                }
+            }
 
-            // Проверяем через секунду
             Handler(Looper.getMainLooper()).postDelayed({
                 checkMarkersIntegrity()
             }, 1000)
@@ -181,7 +257,6 @@ class MapActivity : AppCompatActivity(), InputListener {
         try {
             val point = Point(place.latitude, place.longitude)
 
-            // Используем кэшированный bitmap или создаем новый
             val bitmap = bitmapCache.getOrPut(place.category) {
                 val markerIconResource = getMarkerIcon(place.category)
                 createBitmapFromVector(markerIconResource)
@@ -190,16 +265,17 @@ class MapActivity : AppCompatActivity(), InputListener {
             val markerIcon = ImageProvider.fromBitmap(bitmap)
             val placemark = mapObjectCollection.addPlacemark(point, markerIcon)
 
-            // ВАЖНО: Сначала сохраняем userData
             placemark.userData = place
 
-            // Создаем и сохраняем TapListener
             val tapListener = object : MapObjectTapListener {
                 override fun onMapObjectTap(mapObject: MapObject, point: Point): Boolean {
                     try {
-                        println("Нажатие на маркер: ${place.name}")
-                        showPlaceInfo(place)
-                        return true
+                        if (!isAddingPlace) {  // Только если не в режиме добавления
+                            println("Нажатие на маркер: ${place.name}")
+                            showPlaceInfo(place)
+                            return true
+                        }
+                        return false
                     } catch (e: Exception) {
                         println("Ошибка при нажатии на маркер: ${e.message}")
                         Toast.makeText(this@MapActivity, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -208,11 +284,8 @@ class MapActivity : AppCompatActivity(), InputListener {
                 }
             }
 
-            // Сохраняем сильные ссылки
             placeMarkers[place.id] = placemark
             tapListeners[place.id] = tapListener
-
-            // Добавляем слушатель
             placemark.addTapListener(tapListener)
 
             println("Маркер ${place.id} (${place.name}) успешно создан")
@@ -220,7 +293,6 @@ class MapActivity : AppCompatActivity(), InputListener {
         } catch (e: Exception) {
             println("Ошибка создания маркера для ${place.name}: ${e.message}")
 
-            // Fallback на стандартный маркер
             try {
                 val point = Point(place.latitude, place.longitude)
                 val placemark = mapObjectCollection.addPlacemark(point)
@@ -228,15 +300,17 @@ class MapActivity : AppCompatActivity(), InputListener {
 
                 val tapListener = object : MapObjectTapListener {
                     override fun onMapObjectTap(mapObject: MapObject, point: Point): Boolean {
-                        showPlaceInfo(place)
-                        return true
+                        if (!isAddingPlace) {
+                            showPlaceInfo(place)
+                            return true
+                        }
+                        return false
                     }
                 }
 
                 placeMarkers[place.id] = placemark
                 tapListeners[place.id] = tapListener
                 placemark.addTapListener(tapListener)
-
 
             } catch (fallbackError: Exception) {
                 Toast.makeText(this, "Критическая ошибка маркера ${place.name}: ${fallbackError.message}", Toast.LENGTH_LONG).show()
@@ -249,7 +323,6 @@ class MapActivity : AppCompatActivity(), InputListener {
             val vectorDrawable = ContextCompat.getDrawable(this, vectorResId)
                 ?: throw IllegalArgumentException("Не найден ресурс $vectorResId")
 
-            // Увеличиваем размер для лучшего взаимодействия
             val width = 56.dpToPx()
             val height = 56.dpToPx()
 
@@ -281,6 +354,7 @@ class MapActivity : AppCompatActivity(), InputListener {
             "Торговые центры" -> R.drawable.ic_marker_shopping
             "Рестораны и кафе" -> R.drawable.ic_marker_restaurant
             "Отели" -> R.drawable.ic_marker_hotel
+            "Пользовательские места" -> R.drawable.ic_marker_user  // Новый маркер
             else -> R.drawable.ic_marker_default
         }
     }
@@ -313,7 +387,8 @@ class MapActivity : AppCompatActivity(), InputListener {
     }
 
     private fun showTargetPlace(placeId: Int) {
-        val place = KurskPlacesData.places.find { it.id == placeId }
+        val allPlaces = KurskPlacesData.places + KurskPlacesData.getUserPlaces(this)
+        val place = allPlaces.find { it.id == placeId }
         place?.let {
             val point = Point(it.latitude, it.longitude)
             map.move(
@@ -322,7 +397,6 @@ class MapActivity : AppCompatActivity(), InputListener {
                 null
             )
 
-            // Показываем информацию через небольшую задержку
             Handler(Looper.getMainLooper()).postDelayed({
                 showPlaceInfo(it)
             }, 1500)
@@ -331,25 +405,23 @@ class MapActivity : AppCompatActivity(), InputListener {
 
     private fun showPlaceInfo(place: Place) {
         try {
+            if (isAddingPlace) return  // Не показываем в режиме добавления
+
             println("Показываем информацию о: ${place.name}")
 
             selectedPlace = place
 
             runOnUiThread {
-                // Обновляем UI в главном потоке
                 tvInfoPlaceName.text = place.name
                 tvInfoPlaceAddress.text = place.address
 
                 cardPlaceInfo.visibility = View.VISIBLE
 
-                // Анимация появления панели
                 cardPlaceInfo.alpha = 0f
                 cardPlaceInfo.animate()
                     .alpha(1f)
                     .setDuration(300)
                     .start()
-
-
             }
 
         } catch (e: Exception) {
@@ -370,7 +442,6 @@ class MapActivity : AppCompatActivity(), InputListener {
     }
 
     private fun showAllPlaces() {
-        // Возвращаемся к общему виду Курска
         val kurskCenter = Point(51.7373, 36.1873)
         map.move(
             CameraPosition(kurskCenter, 12.0f, 0.0f, 0.0f),
@@ -413,7 +484,6 @@ class MapActivity : AppCompatActivity(), InputListener {
             intent.setPackage("ru.yandex.yandexmaps")
             startActivity(intent)
         } catch (e: Exception) {
-            // Если Яндекс.Карты не установлены, открываем в браузере
             val uri = "https://yandex.ru/maps/?rtext=~${place.latitude},${place.longitude}&rtt=auto"
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             startActivity(intent)
@@ -435,10 +505,10 @@ class MapActivity : AppCompatActivity(), InputListener {
         }
     }
 
-    // Реализация InputListener для обработки нажатий на карту
     override fun onMapTap(map: Map, point: Point) {
-        // Только скрываем панель, не блокируем события маркеров
-        hideInfoPanel()
+        if (!isAddingPlace) {
+            hideInfoPanel()
+        }
     }
 
     override fun onMapLongTap(map: Map, point: Point) {
@@ -465,7 +535,6 @@ class MapActivity : AppCompatActivity(), InputListener {
         super.onStop()
     }
 
-    // Очистка ресурсов при закрытии активности
     override fun onDestroy() {
         try {
             placeMarkers.clear()
@@ -489,5 +558,6 @@ class MapActivity : AppCompatActivity(), InputListener {
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
+        private const val ADD_PLACE_REQUEST_CODE = 1002
     }
 }

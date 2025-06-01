@@ -2,13 +2,14 @@ package com.example.kurskguide
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.appcompat.widget.SearchView
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,7 +26,8 @@ class MainActivity : AppCompatActivity() {
         Category("🎭", "Театры и кино", "Культурные заведения"),
         Category("🏨", "Отели", "Размещение в городе"),
         Category("⛪", "Храмы", "Религиозные места"),
-        Category("🎓", "Образование", "ВУЗы и школы")
+        Category("🎓", "Образование", "ВУЗы и школы"),
+        Category("📍", "Пользовательские места", "Добавленные пользователями")
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +38,12 @@ class MainActivity : AppCompatActivity() {
         setupRecyclerView()
         setupBottomNavigation()
         setupSearch()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Обновляем категорию пользовательских мест при возврате в активность
+        updateUserPlacesCategory()
     }
 
     private fun initViews() {
@@ -50,7 +58,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        categoryAdapter = CategoryAdapter(categories) { category ->
+        categoryAdapter = CategoryAdapter(getUpdatedCategories()) { category ->
             val intent = Intent(this, PlacesListActivity::class.java)
             intent.putExtra("category", category.name)
             startActivity(intent)
@@ -101,6 +109,31 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
         })
+    }
+
+    private fun updateUserPlacesCategory() {
+        val updatedCategories = getUpdatedCategories()
+        categoryAdapter = CategoryAdapter(updatedCategories) { category ->
+            val intent = Intent(this, PlacesListActivity::class.java)
+            intent.putExtra("category", category.name)
+            startActivity(intent)
+        }
+        recyclerView.adapter = categoryAdapter
+    }
+
+    private fun getUpdatedCategories(): List<Category> {
+        val userPlacesCount = KurskPlacesData.getUserPlaces(this).size
+        return categories.map { category ->
+            if (category.name == "Пользовательские места") {
+                if (userPlacesCount > 0) {
+                    category.copy(description = "Добавленные пользователями ($userPlacesCount)")
+                } else {
+                    category.copy(description = "Добавьте свои места на карте")
+                }
+            } else {
+                category
+            }
+        }
     }
 }
 
@@ -236,15 +269,130 @@ object KurskPlacesData {
         )
     )
 
-    fun getPlacesByCategory(category: String): List<Place> {
-        return places.filter { it.category == category }
+    /**
+     * Получить места по категории, включая пользовательские места
+     */
+    fun getPlacesByCategory(category: String, context: android.content.Context? = null): List<Place> {
+        val allPlaces = if (context != null) {
+            places + getUserPlaces(context)
+        } else {
+            places
+        }
+        return allPlaces.filter { it.category == category }
     }
 
-    fun searchPlaces(query: String): List<Place> {
-        return places.filter {
+    /**
+     * Поиск мест по запросу, включая пользовательские места
+     */
+    fun searchPlaces(query: String, context: android.content.Context? = null): List<Place> {
+        val allPlaces = if (context != null) {
+            places + getUserPlaces(context)
+        } else {
+            places
+        }
+        return allPlaces.filter {
             it.name.contains(query, ignoreCase = true) ||
                     it.description.contains(query, ignoreCase = true) ||
                     it.address.contains(query, ignoreCase = true)
         }
+    }
+
+    /**
+     * Получить все места (стандартные + пользовательские)
+     */
+    fun getAllPlaces(context: android.content.Context? = null): List<Place> {
+        return if (context != null) {
+            places + getUserPlaces(context)
+        } else {
+            places
+        }
+    }
+
+    /**
+     * Сохранить пользовательское место
+     */
+    fun saveUserPlace(context: android.content.Context, place: Place): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences("user_places", android.content.Context.MODE_PRIVATE)
+            val existingPlaces = getUserPlaces(context).toMutableList()
+
+            // Проверяем, не существует ли уже место с таким ID
+            val existingIndex = existingPlaces.indexOfFirst { it.id == place.id }
+            if (existingIndex != -1) {
+                existingPlaces[existingIndex] = place // Обновляем существующее
+            } else {
+                existingPlaces.add(place) // Добавляем новое
+            }
+
+            // Сохраняем список в JSON формате
+            val gson = Gson()
+            val json = gson.toJson(existingPlaces)
+            prefs.edit().putString("places_json", json).apply()
+
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Получить все пользовательские места
+     */
+    fun getUserPlaces(context: android.content.Context?): List<Place> {
+        if (context == null) return emptyList()
+
+        return try {
+            val prefs = context.getSharedPreferences("user_places", android.content.Context.MODE_PRIVATE)
+            val json = prefs.getString("places_json", null)
+
+            if (json != null) {
+                val gson = Gson()
+                val type = object : TypeToken<List<Place>>() {}.type
+                gson.fromJson<List<Place>>(json, type) ?: emptyList()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    /**
+     * Удалить пользовательское место
+     */
+    fun deleteUserPlace(context: android.content.Context, placeId: Int): Boolean {
+        return try {
+            val existingPlaces = getUserPlaces(context).toMutableList()
+            val removed = existingPlaces.removeAll { it.id == placeId }
+
+            if (removed) {
+                val prefs = context.getSharedPreferences("user_places", android.content.Context.MODE_PRIVATE)
+                val gson = Gson()
+                val json = gson.toJson(existingPlaces)
+                prefs.edit().putString("places_json", json).apply()
+            }
+
+            removed
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Получить место по ID (ищет среди всех мест)
+     */
+    fun getPlaceById(context: android.content.Context?, id: Int): Place? {
+        val allPlaces = getAllPlaces(context)
+        return allPlaces.find { it.id == id }
+    }
+
+    /**
+     * Проверить, является ли место пользовательским
+     */
+    fun isUserPlace(context: android.content.Context?, placeId: Int): Boolean {
+        return getUserPlaces(context).any { it.id == placeId }
     }
 }

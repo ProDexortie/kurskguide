@@ -65,6 +65,13 @@
             android:parentActivityName=".MainActivity"
             android:screenOrientation="portrait" />
 
+        <!-- Новая Activity для добавления места -->
+        <activity
+            android:name=".AddPlaceActivity"
+            android:parentActivityName=".MapActivity"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 
 </manifest>

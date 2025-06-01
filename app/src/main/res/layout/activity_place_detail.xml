@@ -96,6 +96,16 @@
                 android:text="📤 Поделиться"
                 style="@style/Widget.Material3.Button.OutlinedButton" />
 
+            <!-- Кнопка удаления (для пользовательских мест) -->
+            <Button
+                android:id="@+id/btnDeletePlace"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="🗑️ Удалить место"
+                android:backgroundTint="#F44336"
+                android:visibility="gone" />
+
         </LinearLayout>
 
     </LinearLayout>

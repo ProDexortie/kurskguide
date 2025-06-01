@@ -10,6 +10,16 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Центральный маркер для добавления места -->
+    <ImageView
+        android:id="@+id/centerMarker"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_centerInParent="true"
+        android:src="@drawable/ic_add_location"
+        android:visibility="gone"
+        android:layout_marginBottom="24dp" />
+
     <!-- Панель управления -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -36,11 +46,87 @@
             android:layout_height="40dp"
             android:layout_weight="1"
             android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:text="Мое место"
             android:textSize="12sp"
             style="@style/Widget.Material3.Button.OutlinedButton" />
 
+        <Button
+            android:id="@+id/btnAddPlace"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="+ Место"
+            android:textSize="12sp"
+            android:backgroundTint="@color/accent_color" />
+
     </LinearLayout>
+
+    <!-- Панель добавления места -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardAddPlace"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_margin="16dp"
+        android:visibility="gone"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="8dp"
+        android:layout_marginTop="80dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📍 Выберите место на карте"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Переместите карту так, чтобы маркер указывал на нужное место"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:textColor="@android:color/darker_gray"
+                android:layout_marginBottom="16dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnCancelAddPlace"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="Отмена"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <Button
+                    android:id="@+id/btnConfirmAddPlace"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="Добавить здесь"
+                    android:backgroundTint="@color/primary_color" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
 
     <!-- Информационная панель -->
     <androidx.cardview.widget.CardView

@@ -2,10 +2,6 @@ package com.example.kurskguide
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -29,7 +25,7 @@ class PlacesListActivity : AppCompatActivity() {
     private fun initViews() {
         recyclerView = findViewById(R.id.recyclerViewPlaces)
 
-        val places = KurskPlacesData.getPlacesByCategory(categoryName)
+        val places = getPlacesByCategory(categoryName)
         placesAdapter = PlacesAdapter(places) { place ->
             val intent = Intent(this, PlaceDetailActivity::class.java)
             intent.putExtra("place_id", place.id)
@@ -43,7 +39,12 @@ class PlacesListActivity : AppCompatActivity() {
     }
 
     private fun loadPlaces() {
-        val places = KurskPlacesData.getPlacesByCategory(categoryName)
+        val places = getPlacesByCategory(categoryName)
         placesAdapter.updatePlaces(places)
+    }
+
+    private fun getPlacesByCategory(category: String): List<Place> {
+        val allPlaces = KurskPlacesData.places + KurskPlacesData.getUserPlaces(this)
+        return allPlaces.filter { it.category == category }
     }
 }

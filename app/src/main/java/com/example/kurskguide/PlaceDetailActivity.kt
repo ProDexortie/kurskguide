@@ -3,12 +3,9 @@ package com.example.kurskguide
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.RecyclerView
 
 class PlaceDetailActivity : AppCompatActivity() {
     private lateinit var place: Place
@@ -19,7 +16,8 @@ class PlaceDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_place_detail)
 
         val placeId = intent.getIntExtra("place_id", -1)
-        place = KurskPlacesData.places.find { it.id == placeId } ?: return finish()
+        val allPlaces = KurskPlacesData.places + KurskPlacesData.getUserPlaces(this)
+        place = allPlaces.find { it.id == placeId } ?: return finish()
 
         initViews()
         loadPlaceData()
@@ -38,6 +36,17 @@ class PlaceDetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvPlaceHours).text = if (place.workingHours.isNotEmpty()) "🕒 ${place.workingHours}" else ""
         findViewById<TextView>(R.id.tvPlaceRating).text = "⭐ ${place.rating}/5.0"
 
+        // Показываем кнопку удаления для пользовательских мест
+        val btnDelete = findViewById<View>(R.id.btnDeletePlace)
+        if (place.category == "Пользовательские места") {
+            btnDelete.visibility = View.VISIBLE
+            btnDelete.setOnClickListener {
+                deleteUserPlace()
+            }
+        } else {
+            btnDelete.visibility = View.GONE
+        }
+
         // Кнопки действий
         findViewById<View>(R.id.btnShowOnMap).setOnClickListener {
             val intent = Intent(this, MapActivity::class.java)
@@ -51,6 +60,12 @@ class PlaceDetailActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.btnShare).setOnClickListener {
             sharePlace()
+        }
+    }
+
+    private fun deleteUserPlace() {
+        if (KurskPlacesData.deleteUserPlace(this, place.id)) {
+            finish()
         }
     }
 
@@ -97,13 +112,6 @@ class PlaceDetailActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("favorites", Context.MODE_PRIVATE)
         val favorites = prefs.getStringSet("favorite_places", mutableSetOf()) ?: mutableSetOf()
         return favorites.contains(placeId.toString())
-    }
-
-    // Получить все избранные места
-    private fun getFavorites(): List<Place> {
-        val prefs = getSharedPreferences("favorites", Context.MODE_PRIVATE)
-        val favoriteIds = prefs.getStringSet("favorite_places", mutableSetOf()) ?: mutableSetOf()
-        return KurskPlacesData.places.filter { favoriteIds.contains(it.id.toString()) }
     }
 
     override fun onSupportNavigateUp(): Boolean {
